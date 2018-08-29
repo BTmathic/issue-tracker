@@ -15,6 +15,7 @@ const mongoose = require('mongoose');
 const db = mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true} );
 
 const Schema = mongoose.Schema;
+  
 const IssueSchema = new Schema({
   issue_title: {
     type: String,
@@ -34,26 +35,52 @@ const IssueSchema = new Schema({
   updated_on: String,
   open: Boolean
 });
+const ProjectSchema = new Schema({
+  name: String,
+  issues: [{type: IssueSchema, default: []}]
+});
+// We need to be able to create a new project if posting an issue to a new project
+ProjectSchema.statics.findOneOrCreate = function(condition, callback) {
+  const self = this;
+  self.findOne(condition, (err, result) => {
+    return result ? callback(err, result) : self.create(condition, (err, result) => { callback(err, result) })
+  });
+}
 
 const Issue = mongoose.model('Issue', IssueSchema);
+const Project = mongoose.model('Project', ProjectSchema);
 
 module.exports = (app) => {
-
+  
   app.route('/api/issues/:project')
   
-    .get((req, res) => { // probably not what's intended, maybe apitest is an example without api/issues for some reason?
+    .get((req, res) => {
       const project = req.params.project;
-      Issue.findOne({_id: project}, (err, data) => {
+      const query = req.query;
+      const queries = new Object;
+      const separatedQueries = JSON.parse(Object.keys(query));
+      if (separatedQueries !== 0) {
+        Object.keys(separatedQueries).forEach((key) => queries[key] = separatedQueries[key]);
+      }
+      Project.find({name: project}, (err, data) => {
         if (err) {
           console.log('Error retrieving data', err);
         }
         
-        res.send(data);
+        res.send(data[0].issues.filter((issue) => {
+          let issueShouldFilter = true;
+          Object.keys(queries).forEach((key) => {
+            if (issue[key].toString() !== queries[key]) {
+              issueShouldFilter = false;
+            }
+          });
+          return issueShouldFilter;
+        }));
       });
     })
     
     .post((req, res) => {
-      const project = req.params.project; // not necessary?
+      const project = req.params.project;
       const issueCreated = new Date();
       const newIssue = new Issue({
         issue_title: req.body.issue_title,
@@ -65,13 +92,20 @@ module.exports = (app) => {
         updated_on: issueCreated,
         open: true,
       });
-      newIssue.save((err, data) => {
+      
+      Project.findOneOrCreate({name: project}, (err, data) => {
         if (err) {
-          console.log('Error saving to db', err);
+          console.log(err);
         }
+        data.issues.push(newIssue);
+        data.save((err) => {
+          if (err) {
+            console.log('Error saving to database', err);
+          }
+        });
       });
+    
       res.send(newIssue);
-      return newIssue;
     })
     
     .put((req, res) => {
@@ -82,41 +116,79 @@ module.exports = (app) => {
         issue_text: req.body.issue_text,
         created_by: req.body.created_by,
         assigned_to: req.body.assigned_to,
-        status_text: req.body.status_text
+        status_text: req.body.status_text,
+        open: req.body.open
       };
       // remove the elements the user left blank
-      Object.keys(updates).forEach(i => (updates[i] === '') && delete updates[i]);
+      Object.keys(updates).forEach(i => (updates[i] === '' || updates[i] === undefined) && delete updates[i]);
       if (Object.keys(updates).length === 0) {
         updateStatus = 'no updated field sent';
+      } else {
+        const updatedIssue = Project.findOne({name: project}, (err, data) => {
+          if (err) {
+            console.log('Error updating ', err);
+          }
+          if (data === null) {
+            updateStatus = 'could not update ' + req.body._id;
+          } else {
+            const issues = data.issues;
+            let updateIndex = -1;
+            for (let i=0; i < issues.length; i++) {
+              if (issues[i]._id.toString() === req.body._id) {
+                updateIndex = i;
+              }
+            }
+            if (updateIndex === -1) {
+              updateStatus = 'could not update ' + req.body._id;
+            } else {
+              for (let key in updates) {
+                if (updates.hasOwnProperty(key)) {
+                  issues[updateIndex][key] = updates[key];
+                }
+              }
+              data.save((err) => {
+                if (err) {
+                  console.log('Error updating ', err);
+                }
+              });
+            }
+          }
+        });
       }
-      const updatedIssue = Issue.findOneAndUpdate({ _id: req.body._id }, updates, {new: true}, (err, data) => {
-        if (err) {
-          console.log('Error updating', err);
-        }
-        
-        return data;
-      });
       
       res.send(updateStatus);
-      return updateStatus;
     })
     
     .delete((req, res) => {
       const project = req.params.project;
       let deleteStatus = 'deleted ' + req.body._id;
       
-      Issue.findOneAndDelete({ _id: req.body._id }, (err, data) => {
+      Project.findOne({name: project}, (err, data) => {
         if (data === null) {
-          console.log('dur');
           deleteStatus = 'could not delete ' + req.body._id;
         } else {
-          console.log(data);
+          const issues = data.issues;
+          let issueIndex = -1;
+          for (let i=0; i < issues.length; i++) {
+            if (issues[i]._id.toString() === req.body._id) {
+              issueIndex = i;
+            }
+          }
+          if (issueIndex === -1) {
+            deleteStatus = 'could not delete ' + req.body._id;
+          } else {
+            data.issues = issues.slice(0,issueIndex).concat(issues.slice(issueIndex+1, issues.length));
+          }
+          data.save((err) => {
+            if (err) {
+              console.log(err);
+            }
+          });
         }
         if (err) {
           console.log(err);
         }
         res.send(deleteStatus);
-        return deleteStatus;
       });
     });
 };
