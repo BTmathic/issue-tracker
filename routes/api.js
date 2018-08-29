@@ -95,7 +95,7 @@ module.exports = (app) => {
     .post((req, res) => {
       const project = req.params.project;
       const issueCreated = new Date();
-      const newIssue = new Issue({
+      let newIssue = new Issue({
         issue_title: req.body.issue_title,
         issue_text: req.body.issue_text,
         created_by: req.body.created_by,
@@ -105,19 +105,23 @@ module.exports = (app) => {
         updated_on: issueCreated,
         open: true,
       });
-      
-      Project.findOneOrCreate({name: project}, (err, data) => {
-        if (err) {
-          console.log(err);
-        }
-        data.issues.push(newIssue);
-        data.save((err) => {
-          if (err) {
-            console.log('Error saving to database', err);
-          }
-        });
-      });
     
+      if (newIssue.issue_title === undefined || newIssue.issue_text === undefined || newIssue.created_by === undefined) {
+        newIssue = 'required parameters not send'; // we only need this for testing as HTML5 validation prevents the user form doing this
+      } else {
+        Project.findOneOrCreate({name: project}, (err, data) => {
+          if (err) {
+            console.log(err);
+          }
+          data.issues.push(newIssue);
+          data.save((err) => {
+            if (err) {
+              console.log('Error saving to database', err);
+            }
+          });
+        });
+      }
+      
       res.send(newIssue);
     })
     
@@ -176,32 +180,37 @@ module.exports = (app) => {
       const project = req.params.project;
       let deleteStatus = 'deleted ' + req.body._id;
       
-      Project.findOne({name: project}, (err, data) => {
-        if (data === null) {
-          deleteStatus = 'could not delete ' + req.body._id;
-        } else {
-          const issues = data.issues;
-          let issueIndex = -1;
-          for (let i=0; i < issues.length; i++) {
-            if (issues[i]._id.toString() === req.body._id) {
-              issueIndex = i;
-            }
-          }
-          if (issueIndex === -1) {
+      if (req.body._id === undefined) { // we only need this for tests as (again) HTML5 validation ensures the user can never do this
+        deleteStatus = '_id error';
+      } else {
+        Project.findOne({name: project}, (err, data) => {
+          if (data === null) {
             deleteStatus = 'could not delete ' + req.body._id;
           } else {
-            data.issues = issues.slice(0,issueIndex).concat(issues.slice(issueIndex+1, issues.length));
-          }
-          data.save((err) => {
-            if (err) {
-              console.log(err);
+            const issues = data.issues;
+            let issueIndex = -1;
+            for (let i=0; i < issues.length; i++) {
+              if (issues[i]._id.toString() === req.body._id) {
+                issueIndex = i;
+              }
             }
-          });
-        }
-        if (err) {
-          console.log(err);
-        }
-        res.send(deleteStatus);
-      });
+            if (issueIndex === -1) {
+              deleteStatus = 'could not delete ' + req.body._id;
+            } else {
+              data.issues = issues.slice(0,issueIndex).concat(issues.slice(issueIndex+1, issues.length));
+            }
+            data.save((err) => {
+              if (err) {
+                console.log(err);
+              }
+            });
+          }
+          if (err) {
+            console.log(err);
+          }
+        });
+      }
+    
+    res.send(deleteStatus);
     });
 };
