@@ -8,7 +8,7 @@ Part of the **FreeCodeCamp**- Information Security and Quality Assurance project
 ### Back End
 * Node
 * Express
-* MongoDB and Mongoose (via [mLabl](https://mlab.com/home))
+* MongoDB and Mongoose (via [mLab](https://mlab.com/home))
 
 ### Testing
 * Chai
