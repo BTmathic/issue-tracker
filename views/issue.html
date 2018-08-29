@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Welcome to HyperDev!</title>
-    <meta name="description" content="A cool thing made with HyperDev">
+    <title>Issue Tracker</title>
+    <meta name="description" content="Issue tracker for individual projects">
     <link id="favicon" rel="icon" href="https://hyperdev.com/favicon-app.ico" type="image/x-icon">
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -37,15 +37,27 @@
             crossorigin="anonymous"></script>
     <script>
       $(function() {
-        const currentProject = window.location.pathname.replace(/\//g, "");;
-        const url = "/api/issues/"+currentProject;
+        const currentProject = window.location.pathname.replace(/\//g, "");
+        const query = window.location.href.split('?')[1];
+        let queries;
+        if (query !== undefined) {
+          queries = new Object;
+          query.split('&').forEach((query) => {
+            const splitQuery = query.split('=');
+            queries[splitQuery[0]] = splitQuery[1];
+          });
+        } else {
+          queries = [];
+        }
+        let url = "/api/issues/"+currentProject;
         $('#projectTitle').text('All issues for: '+currentProject)
         $.ajax({
           type: "GET",
           url: url,
+          data: JSON.stringify(queries),
           success: (data) =>
           {
-            const issues= [];
+            const issues = [];
             data.forEach((issue) => {
               console.log(issue);
               let openstatus;
@@ -76,27 +88,25 @@
           $.ajax({
             type: "POST",
             url: url,
-            data: $(this).serialize(),
+            data: $('#newIssue').serialize(),
             success: (data) => { window.location.reload(true); }
           });
         });
         
         $('#issueDisplay').on('click','.closeIssue', (e) => {
-          const url = "/api/issues/"+currentProject;
           $.ajax({
             type: "PUT",
             url: url,
-            data: {_id: $(this).attr('id'), open: false},
+            data: {_id: e.target.id, open: false},
             success: (data) => { alert(data); window.location.reload(true); }
           });
           e.preventDefault();
         });
         $('#issueDisplay').on('click','.deleteIssue', (e) => {
-          const url = "/api/issues/"+currentProject;
           $.ajax({
             type: "DELETE",
             url: url,
-            data: {_id: $(this).attr('id')},
+            data: {_id: e.target.id},
             success: (data) => { alert(data); window.location.reload(true); }
           });
           e.preventDefault();
