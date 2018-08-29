@@ -58,7 +58,20 @@ module.exports = (app) => {
       const project = req.params.project;
       const query = req.query;
       const queries = new Object;
-      const separatedQueries = JSON.parse(Object.keys(query));
+      let separatedQueries;
+      if (Object.values(query)[0] === '') {
+        if (Object.keys(query)[0] !== '0') {
+          separatedQueries = JSON.parse(Object.keys(query));
+        } else {
+          separatedQueries = 0;
+        }
+      } else {
+        if (Object.keys(query).length === 0) {
+          separatedQueries = 0;
+        } else {
+          separatedQueries = query;
+        }
+      }
       if (separatedQueries !== 0) {
         Object.keys(separatedQueries).forEach((key) => queries[key] = separatedQueries[key]);
       }
